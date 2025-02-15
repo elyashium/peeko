@@ -1,0 +1,17 @@
+{ 
+    "manifest_version" : 3,
+    "name": "peeko",
+    "description" : "chrome extention that lets get a peek before a click for webpages",
+    "version" : "1.0.0",
+    "permissions" : [ "activeTab", "scripting"],
+    "action" : {
+        "default_popup" : "index.html"
+    },
+    "content_scripts" : [
+        {
+            "js" : ["src/content/index.jsx"],
+            "matches" : ["<all_urls>"]
+        }
+    ] 
+
+}
