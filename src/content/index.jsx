@@ -3,16 +3,16 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import debounce from 'lodash.debounce';
-import { Preview } from './components/LinkPreview';
+import { LinkPreview } from './components/LinkPreview';
 
-const CreateshadowContainer = () => {
+const createShadowContainer = () => {
     const container = document.createElement('div');
     container.id = 'peeko-shadow-container';
     document.body.appendChild(container);
 
     //creating shadowRoot 
 
-    const shadowRoot = conatiner.attachShadow({ mode: 'open' });
+    const shadowRoot = container.attachShadow({ mode: 'open' });
     const shadowContainer = document.createElement('div');
     shadowContainer.id = 'peeko-root';
     shadowRoot.appendChild(shadowContainer);
@@ -98,26 +98,91 @@ const handleLinkLeave = () => {
 // enters or leaves the viewport or the specified container.
 
 const linkObserver = () => {
-
-    //select all the links.
-
     const links = document.querySelectorAll('a[href]');
 
-    //creating a instance of the observationselection.
-
     const observer = new IntersectionObserver((entries) => {
-
         entries.forEach(entry => {
             if (entry.isIntersecting) {
-                //link is visible add event listeners.
-                entry.target.addEventListener('mouseOver', handleLinkHover);
-                entry.target.addEventListener('mouseLeave', handleLinkLeave);
-            }
-            else {
-                // remove the listeners
-                entry.target.removeEventListner('mouseOver', handleLinkHover);
-                entry.target.removeEventListener('mouseLeave', handleLinkLeave);
+                // Fix event name capitalization
+                entry.target.addEventListener('mouseover', handleLinkHover);
+                entry.target.addEventListener('mouseleave', handleLinkLeave);
+            } else {
+                // Fix event name capitalization and removeEventListener typo
+                entry.target.removeEventListener('mouseover', handleLinkHover);
+                entry.target.removeEventListener('mouseleave', handleLinkLeave);
             }
         });
-    })
-}
+    });
+
+    links.forEach(link => observer.observe(link));
+    return observer;
+};
+
+//set up a mutation observer, its simillar to intersection observer but it overlooks 
+//the entir DOM, hence its more expensive
+//we are using it her to detect dynamic links changes.
+
+
+// Calls setupLinkObservers() to start observing existing links.
+// Creates a MutationObserver that listens for changes (childList) in the document body.
+// When a new element is added (mutation.addedNodes):
+// If it's an element node, it checks for <a href="..."> links inside it.
+// If new links are found, it sets shouldRescanLinks = true.
+// If new links are detected, it:
+// Stops (disconnect) the current link observer.
+// Waits 100ms (setTimeout) and then sets up link observers again (setupLinkObservers()).
+// Why disconnect and reconnect?
+// This ensures that the link observer is refreshed and starts watching newly added links
+
+const watchForNewLinks = () => {
+    const linkObs = linkObserver();
+
+    const mutationObserver = new MutationObserver((mutations) => {
+        let shouldRescanLinks = false;
+
+        mutations.forEach(mutation => {
+            if (mutation.type === 'childList') {
+                mutation.addedNodes.forEach(node => {
+                    if (node.nodeType === Node.ELEMENT_NODE) {
+                        const newLinks = node.querySelectorAll('a[href]');
+                        if (newLinks.length > 0) {
+                            shouldRescanLinks = true;
+                        }
+                    }
+                });
+            }
+        });
+
+        if (shouldRescanLinks) {
+            linkObs.disconnect();
+            setTimeout(() => {
+                linkObserver();
+            }, 100);
+        }
+    });
+
+    mutationObserver.observe(document.body, {
+        childList: true,
+        subtree: true
+    });
+
+    return mutationObserver;
+};
+
+// Initialize observers
+const init = () => {
+    const linkObs = linkObserver();
+    const mutationObserver = watchForNewLinks();
+
+    // Clean up function
+    return () => {
+        linkObs.disconnect();
+        mutationObserver.disconnect();
+    };
+};
+
+// Start the observers
+const cleanup = init();
+
+// Clean up when extension is unloaded
+window.addEventListener('unload', cleanup);
