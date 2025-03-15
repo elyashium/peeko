@@ -64,6 +64,8 @@ renderPreview();
 
 // this runs 200ms after the user hovers over a link.
 
+// hover handler
+
 const handleLinkHover = debounce(event => {
     const link = event.target.closest('a');
     //find the closesst anchor tag
@@ -80,3 +82,42 @@ const handleLinkHover = debounce(event => {
     renderPreview(); // Update preview UI
 
 }, 200);
+
+// hover over handler (mouse leave)
+
+const handleLinkLeave = () => {
+    currentPreviewData = {
+        ...currentPreviewData,
+        visible: false
+    };
+    renderPreview();
+};
+
+//link detection with intersection observer,
+// intersection ovbservation API is used to efficiently detect when an element
+// enters or leaves the viewport or the specified container.
+
+const linkObserver = () => {
+
+    //select all the links.
+
+    const links = document.querySelectorAll('a[href]');
+
+    //creating a instance of the observationselection.
+
+    const observer = new IntersectionObserver((entries) => {
+
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                //link is visible add event listeners.
+                entry.target.addEventListener('mouseOver', handleLinkHover);
+                entry.target.addEventListener('mouseLeave', handleLinkLeave);
+            }
+            else {
+                // remove the listeners
+                entry.target.removeEventListner('mouseOver', handleLinkHover);
+                entry.target.removeEventListener('mouseLeave', handleLinkLeave);
+            }
+        });
+    })
+}
