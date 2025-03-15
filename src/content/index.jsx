@@ -51,3 +51,32 @@ const renderPreview = () => {
 
 //intialisating the first preview state.
 renderPreview();
+
+
+// to display a preview of a link when a user hovers over it,
+// with debouncing to avoid excessive function calls
+
+// const handleLinkHover = debounce((event) => {...}, 200);
+
+//debounce(func, delay): Ensures that func executes only 
+//after delay milliseconds (200ms here) since the last invocation
+
+
+// this runs 200ms after the user hovers over a link.
+
+const handleLinkHover = debounce(event => {
+    const link = event.target.closest('a');
+    //find the closesst anchor tag
+    if (!link || !link.href) {
+        return;
+    }
+
+    currentPreviewData = {
+        visible: true, // Show preview
+        url: link.href, // Store link URL
+        x: event.clientX, // Mouse X position
+        y: event.clientY  // Mouse Y position
+    };
+    renderPreview(); // Update preview UI
+
+}, 200);
