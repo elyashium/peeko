@@ -9,16 +9,16 @@ import React from 'react';
 // It positions the preview next to the cursor and shows relevant information
 
 interface LinkPreviewProps {
-  visible: boolean;
-  url: string;
-  x: number;
-  y: number;
-  title: string;
-  description: string;
+    visible: boolean;
+    url: string;
+    x: number;
+    y: number;
+    title: string;
+    description: string;
   image: string | null;
   favicon: string | null;
   domain: string;
-  loading: boolean;
+    loading: boolean;
 }
 
 const LinkPreview: React.FC<LinkPreviewProps> = ({ 

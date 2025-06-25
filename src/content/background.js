@@ -24,6 +24,7 @@ centralised caching in background script(as it runs most of the time in backgrou
 // 2. Fetching link preview data
 // 3. Centralized caching of previews
 // 4. Communicating with content scripts
+import { parse } from 'node-html-parser';
 
 // Fix: using correct API (chrome instead of chromeExtension)
 chrome.runtime.onInstalled.addListener(() => {
@@ -40,8 +41,7 @@ const previewCache = new Map();
 
 // Function to extract preview data from HTML
 function extractPreviewData(html, url) {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(html, 'text/html');
+  const doc = parse(html);
   
   // Extract title
   const title = doc.querySelector('title')?.textContent || 'No title available';
