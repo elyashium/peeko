@@ -57,6 +57,10 @@ renderPreview();
 // with debouncing to avoid excessive function calls
 
 // const handleLinkHover = debounce((event) => {...}, 200);
+//what is debounce?
+//debounce is a function that delays the execution of a function until a certain amount of time has passed since the last time the function was called.
+//it is used to prevent excessive function calls.
+
 
 //debounce(func, delay): Ensures that func executes only 
 //after delay milliseconds (200ms here) since the last invocation
@@ -97,12 +101,20 @@ const handleLinkLeave = () => {
 // intersection ovbservation API is used to efficiently detect when an element
 // enters or leaves the viewport or the specified container.
 
+//the problem :  A webpage can have thousands of links. Attaching our hover-watching 
+// logic to every single one all the time would be inefficient and could slow down the page.
+//The Solution: The IntersectionObserver is a modern browser feature that is extremely efficient.
+//it is used to detect when an element enters or leaves the viewport or the specified container.
+
+
+
 const linkObserver = () => {
     const links = document.querySelectorAll('a[href]');
 
     const observer = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
             if (entry.isIntersecting) {
+                //entry.isIntersecting is a boolean that is true when the element is intersecting with the viewport.
                 // Fix event name capitalization
                 entry.target.addEventListener('mouseover', handleLinkHover);
                 entry.target.addEventListener('mouseleave', handleLinkLeave);
@@ -121,6 +133,10 @@ const linkObserver = () => {
 //set up a mutation observer, its simillar to intersection observer but it overlooks 
 //the entir DOM, hence its more expensive
 //we are using it her to detect dynamic links changes.
+
+//The Problem: Modern websites are dynamic. New content can be loaded as you scroll (like on Twitter or Facebook)
+// or content can change without the page reloading. Our linkObserver only runs once at the beginning, so it wouldn't know about these new links.
+//The Solution: The MutationObserver acts like a guard for the entire webpage's structure (the DOM). It is used to detect changes in the DOM.
 
 
 // Calls setupLinkObservers() to start observing existing links.
