@@ -1,5 +1,20 @@
 // link detection logic.
 
+
+
+/*
+The Problem: Your current cache in background.js (the previewCache Map) will grow indefinitely as the user browses. 
+This can consume a significant amount of memory over a long period, a "memory leak."
+
+The Solution: Implement a more robust caching strategy.
+Time-to-Live (TTL): Don't store cached items forever. When you add an item to the cache, also use setTimeout to automatically delete 
+it after a certain period (e.g., 1 hour). I've already added this to your background.js.
+Size Capping: Periodically check the size of the cache Map.
+ If it exceeds a certain number of entries (e.g., 100), remove the oldest entries to keep memory usage in check.
+ also added a setInterval for this
+
+*/
+
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import debounce from 'lodash.debounce';
