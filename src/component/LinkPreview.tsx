@@ -98,16 +98,5 @@ export const LinkPreview: React.FC<LinkPreviewProps> = ({ visible, url, x, y }) 
         pointerEvents: 'none', // This prevents the preview from interfering with mouse interactions.
     } as React.CSSProperties;
 
-    //   +-----------------+
-    //   |                 |
-    //   |  Preview Widget |
-    //   |                 |
-    //   +-----------------+
-    //            ^
-    //            |
-    //            | (10px gap)
-    //            |
-    //            X (cursor position at coordinates x,y)
-
 
 }
