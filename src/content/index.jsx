@@ -3,7 +3,51 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import debounce from 'lodash.debounce';
-import { LinkPreview } from './components/LinkPreview';
+import LinkPreview from '../component/LinkPreview';
+
+// Track the extension's enabled state
+let isExtensionEnabled = true;
+let extensionSettings = {
+  showOnHover: true,
+  enableForAllWebsites: true
+};
+
+// Load extension state from storage on startup
+chrome.storage.local.get(['isEnabled', 'showOnHover', 'enableForAllWebsites'], (result) => {
+  isExtensionEnabled = result.isEnabled !== undefined ? result.isEnabled : true;
+  if (result.showOnHover !== undefined) extensionSettings.showOnHover = result.showOnHover;
+  if (result.enableForAllWebsites !== undefined) extensionSettings.enableForAllWebsites = result.enableForAllWebsites;
+  console.log('PeekO Extension state loaded:', isExtensionEnabled, extensionSettings);
+  
+  // Only initialize if the extension is enabled
+  if (isExtensionEnabled) {
+    init();
+  }
+});
+
+// Listen for messages from background script
+chrome.runtime.onMessage.addListener((message) => {
+  console.log('Content script received message:', message);
+  
+  if (message.type === 'extension-state-changed') {
+    const wasEnabled = isExtensionEnabled;
+    isExtensionEnabled = message.enabled;
+    
+    // If toggled ON, initialize
+    if (!wasEnabled && isExtensionEnabled) {
+      init();
+    }
+    
+    // If toggled OFF, cleanup
+    if (wasEnabled && !isExtensionEnabled) {
+      cleanup();
+    }
+  }
+  
+  if (message.type === 'settings-changed') {
+    extensionSettings = {...extensionSettings, ...message.settings};
+  }
+});
 
 const createShadowContainer = () => {
     const container = document.createElement('div');
@@ -11,19 +55,25 @@ const createShadowContainer = () => {
     document.body.appendChild(container);
 
     //creating shadowRoot 
-
     const shadowRoot = container.attachShadow({ mode: 'open' });
     const shadowContainer = document.createElement('div');
     shadowContainer.id = 'peeko-root';
     shadowRoot.appendChild(shadowContainer);
 
     return shadowContainer;
-
 };
 
 // Create and render React root
-const shadowContainer = createShadowContainer();
-const root = ReactDOM.createRoot(shadowContainer);
+let shadowContainer;
+let root;
+
+function setupReactRoot() {
+  shadowContainer = createShadowContainer();
+  root = ReactDOM.createRoot(shadowContainer);
+  
+  // Initialize the preview with empty state
+  renderPreview();
+}
 
 // Cache for storing previews
 const previewCache = new Map();
@@ -33,62 +83,111 @@ let currentPreviewData = {
     visible: false,
     url: '',
     x: 0,
-    y: 0
+    y: 0,
+    title: '',
+    description: '',
+    image: '',
+    favicon: '',
+    domain: '',
+    loading: false
 };
 
 //rendering the preview 
-
 const renderPreview = () => {
+    if (!root) return;
+    
     root.render(
-        <Preview
+        <LinkPreview
             visible={currentPreviewData.visible}
             url={currentPreviewData.url}
             x={currentPreviewData.x}
             y={currentPreviewData.y}
+            title={currentPreviewData.title}
+            description={currentPreviewData.description}
+            image={currentPreviewData.image}
+            favicon={currentPreviewData.favicon}
+            domain={currentPreviewData.domain}
+            loading={currentPreviewData.loading}
         />
     );
 };
 
-//intialisating the first preview state.
-renderPreview();
-
-
-// to display a preview of a link when a user hovers over it,
-// with debouncing to avoid excessive function calls
-
-// const handleLinkHover = debounce((event) => {...}, 200);
-//what is debounce?
-//debounce is a function that delays the execution of a function until a certain amount of time has passed since the last time the function was called.
-//it is used to prevent excessive function calls.
-
-
-//debounce(func, delay): Ensures that func executes only 
-//after delay milliseconds (200ms here) since the last invocation
-
+// Fetch preview data from background script
+const fetchPreviewFromBackground = (url) => {
+    return new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage(
+            { type: 'get-preview', url },
+            (response) => {
+                if (chrome.runtime.lastError) {
+                    reject(chrome.runtime.lastError);
+                    return;
+                }
+                
+                if (response.status === 'disabled') {
+                    reject(new Error('Extension is disabled'));
+                    return;
+                }
+                
+                if (response.status === 'error') {
+                    reject(new Error(response.error));
+                    return;
+                }
+                
+                resolve(response.data);
+            }
+        );
+    });
+};
 
 // this runs 200ms after the user hovers over a link.
-
 // hover handler
-
-const handleLinkHover = debounce(event => {
+const handleLinkHover = debounce(async event => {
+    // If extension is disabled, don't do anything
+    if (!isExtensionEnabled) return;
+    
     const link = event.target.closest('a');
-    //find the closesst anchor tag
+    //find the closest anchor tag
     if (!link || !link.href) {
         return;
     }
-
+    
+    // Show loading state immediately
     currentPreviewData = {
-        visible: true, // Show preview
-        url: link.href, // Store link URL
-        x: event.clientX, // Mouse X position
-        y: event.clientY  // Mouse Y position
+        ...currentPreviewData,
+        visible: true,
+        url: link.href,
+        x: event.clientX,
+        y: event.clientY,
+        loading: true
     };
-    renderPreview(); // Update preview UI
-
+    renderPreview();
+    
+    try {
+        // Try to get preview from background script
+        const previewData = await fetchPreviewFromBackground(link.href);
+        
+        // Update with actual data
+        currentPreviewData = {
+            ...currentPreviewData,
+            ...previewData,
+            loading: false
+        };
+        renderPreview();
+    } catch (error) {
+        console.error('Error fetching preview:', error);
+        
+        // Show error state
+        currentPreviewData = {
+            ...currentPreviewData,
+            title: 'Could not load preview',
+            description: 'The preview for this link could not be loaded.',
+            loading: false
+        };
+        renderPreview();
+    }
 }, 200);
 
 // hover over handler (mouse leave)
-
 const handleLinkLeave = () => {
     currentPreviewData = {
         ...currentPreviewData,
@@ -98,15 +197,8 @@ const handleLinkLeave = () => {
 };
 
 //link detection with intersection observer,
-// intersection ovbservation API is used to efficiently detect when an element
+// intersection observation API is used to efficiently detect when an element
 // enters or leaves the viewport or the specified container.
-
-//the problem :  A webpage can have thousands of links. Attaching our hover-watching 
-// logic to every single one all the time would be inefficient and could slow down the page.
-//The Solution: The IntersectionObserver is a modern browser feature that is extremely efficient.
-//it is used to detect when an element enters or leaves the viewport or the specified container.
-
-
 
 const linkObserver = () => {
     const links = document.querySelectorAll('a[href]');
@@ -114,7 +206,6 @@ const linkObserver = () => {
     const observer = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
             if (entry.isIntersecting) {
-                //entry.isIntersecting is a boolean that is true when the element is intersecting with the viewport.
                 // Fix event name capitalization
                 entry.target.addEventListener('mouseover', handleLinkHover);
                 entry.target.addEventListener('mouseleave', handleLinkLeave);
@@ -133,22 +224,6 @@ const linkObserver = () => {
 //set up a mutation observer, its simillar to intersection observer but it overlooks 
 //the entir DOM, hence its more expensive
 //we are using it her to detect dynamic links changes.
-
-//The Problem: Modern websites are dynamic. New content can be loaded as you scroll (like on Twitter or Facebook)
-// or content can change without the page reloading. Our linkObserver only runs once at the beginning, so it wouldn't know about these new links.
-//The Solution: The MutationObserver acts like a guard for the entire webpage's structure (the DOM). It is used to detect changes in the DOM.
-
-
-// Calls setupLinkObservers() to start observing existing links.
-// Creates a MutationObserver that listens for changes (childList) in the document body.
-// When a new element is added (mutation.addedNodes):
-// If it's an element node, it checks for <a href="..."> links inside it.
-// If new links are found, it sets shouldRescanLinks = true.
-// If new links are detected, it:
-// Stops (disconnect) the current link observer.
-// Waits 100ms (setTimeout) and then sets up link observers again (setupLinkObservers()).
-// Why disconnect and reconnect?
-// This ensures that the link observer is refreshed and starts watching newly added links
 
 const watchForNewLinks = () => {
     const linkObs = linkObserver();
@@ -172,7 +247,10 @@ const watchForNewLinks = () => {
         if (shouldRescanLinks) {
             linkObs.disconnect();
             setTimeout(() => {
-                linkObserver();
+                // Store the result in linkObs to be able to properly disconnect it later
+                const newLinkObs = linkObserver();
+                // This is a fix for the issue in the original code
+                Object.assign(linkObs, newLinkObs);
             }, 100);
         }
     });
@@ -187,18 +265,51 @@ const watchForNewLinks = () => {
 
 // Initialize observers
 const init = () => {
+    console.log('Initializing PeekO content script');
+    
+    // Setup React root
+    setupReactRoot();
+    
+    // Start observers
     const linkObs = linkObserver();
     const mutationObserver = watchForNewLinks();
 
-    // Clean up function
+    // Return cleanup function
     return () => {
         linkObs.disconnect();
         mutationObserver.disconnect();
+        
+        // Clean up React root
+        if (root) {
+            try {
+                root.unmount();
+            } catch (e) {
+                console.error('Error unmounting React root:', e);
+            }
+        }
+        
+        // Remove shadow container
+        if (shadowContainer && shadowContainer.parentNode) {
+            shadowContainer.parentNode.remove();
+        }
     };
 };
 
-// Start the observers
-const cleanup = init();
+// Reference to cleanup function
+let cleanupFunction = null;
+
+// Start the observers if enabled
+if (isExtensionEnabled) {
+    cleanupFunction = init();
+}
+
+// Define cleanup function to be called when extension is disabled or unloaded
+function cleanup() {
+    if (cleanupFunction) {
+        cleanupFunction();
+        cleanupFunction = null;
+    }
+}
 
 // Clean up when extension is unloaded
 window.addEventListener('unload', cleanup);

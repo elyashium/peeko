@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 //the popup that will be shown when you click on the extension icon on 
 //chrome extension toolbar
 
@@ -8,10 +8,64 @@ import React, { useState } from 'react'
 
 export default function App() {
   const [isEnabled, setIsEnabled] = useState(true);
+  const [settings, setSettings] = useState({
+    showOnHover: true,
+    enableForAllWebsites: true
+  });
+  const [status, setStatus] = useState(''); // For user feedback
+  
+  // Load initial state from storage
+  useEffect(() => {
+    chrome.storage.local.get(['isEnabled', 'showOnHover', 'enableForAllWebsites'], (result) => {
+      if (result.isEnabled !== undefined) setIsEnabled(result.isEnabled);
+      
+      const updatedSettings = { ...settings };
+      if (result.showOnHover !== undefined) updatedSettings.showOnHover = result.showOnHover;
+      if (result.enableForAllWebsites !== undefined) updatedSettings.enableForAllWebsites = result.enableForAllWebsites;
+      setSettings(updatedSettings);
+    });
+  }, []);
   
   const toggleExtension = () => {
-    setIsEnabled(!isEnabled);
-    // Here you would add logic to actually enable/disable the extension functionality
+    const newState = !isEnabled;
+    setIsEnabled(newState);
+    
+    // Send message to background script to update state
+    chrome.runtime.sendMessage(
+      { type: 'toggle-extension', enabled: newState },
+      (response) => {
+        if (chrome.runtime.lastError) {
+          console.error('Error toggling extension:', chrome.runtime.lastError);
+          setStatus('Error toggling extension');
+          return;
+        }
+        
+        setStatus(`Extension ${newState ? 'enabled' : 'disabled'}`);
+        // Clear status after 2 seconds
+        setTimeout(() => setStatus(''), 2000);
+      }
+    );
+  };
+  
+  const updateSetting = (key, value) => {
+    const updatedSettings = { ...settings, [key]: value };
+    setSettings(updatedSettings);
+    
+    // Send message to background script to update settings
+    chrome.runtime.sendMessage(
+      { type: 'update-settings', settings: { [key]: value } },
+      (response) => {
+        if (chrome.runtime.lastError) {
+          console.error('Error updating settings:', chrome.runtime.lastError);
+          setStatus('Error updating settings');
+          return;
+        }
+        
+        setStatus('Settings updated');
+        // Clear status after 2 seconds
+        setTimeout(() => setStatus(''), 2000);
+      }
+    );
   };
 
   return (
@@ -37,6 +91,13 @@ export default function App() {
         </button>
       </div>
       
+      {/* Status message */}
+      {status && (
+        <div className="bg-blue-50 text-blue-700 text-xs p-2 rounded mb-3 text-center">
+          {status}
+        </div>
+      )}
+      
       {/* Divider */}
       <div className="h-px bg-gray-200 my-3"></div>
       
@@ -60,14 +121,29 @@ export default function App() {
           <div className="flex flex-col gap-2">
             <label className="flex items-center justify-between cursor-pointer">
               <span className="text-xs text-gray-600">Show preview on hover</span>
-              <input type="checkbox" defaultChecked className="rounded text-blue-500 focus:ring-blue-500 h-4 w-4" />
+              <input 
+                type="checkbox" 
+                checked={settings.showOnHover}
+                onChange={(e) => updateSetting('showOnHover', e.target.checked)} 
+                className="rounded text-blue-500 focus:ring-blue-500 h-4 w-4"
+              />
             </label>
             <label className="flex items-center justify-between cursor-pointer">
               <span className="text-xs text-gray-600">Enable for all websites</span>
-              <input type="checkbox" defaultChecked className="rounded text-blue-500 focus:ring-blue-500 h-4 w-4" />
+              <input 
+                type="checkbox" 
+                checked={settings.enableForAllWebsites}
+                onChange={(e) => updateSetting('enableForAllWebsites', e.target.checked)}
+                className="rounded text-blue-500 focus:ring-blue-500 h-4 w-4"
+              />
             </label>
           </div>
         </div>
+      </div>
+      
+      {/* Footer */}
+      <div className="mt-4 text-center">
+        <p className="text-xs text-gray-400">Made with ❤️ by PeekO</p>
       </div>
     </div>
   )

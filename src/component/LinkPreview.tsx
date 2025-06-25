@@ -3,100 +3,186 @@
 // Priority 3: Fetch from remote server
 
 
-import react, { useState, useEffect } from 'react';
-import browser from 'webextension-polyfill'
+import React from 'react';
 
-//promise-based API for browser extensions, ensuring compatibility between Chrome, Firefox, and other browsers
-//beacause chrome uses a callback based API
-// and firefox uses a promise based API
-// so we use webextension-polyfill to ensure compatibility
+// This component displays a preview of a link when hovering over it
+// It positions the preview next to the cursor and shows relevant information
 
 interface LinkPreviewProps {
-    visible: boolean;
-    url: string;
-    x: number;
-    y: number;
+  visible: boolean;
+  url: string;
+  x: number;
+  y: number;
+  title: string;
+  description: string;
+  image: string | null;
+  favicon: string | null;
+  domain: string;
+  loading: boolean;
 }
 
-interface PreviewData {
-    title: string;
-    description: string;
-    image: string;
-    loading: boolean;
-    error: string | null;
-}
+const LinkPreview: React.FC<LinkPreviewProps> = ({ 
+  visible, 
+  url, 
+  x, 
+  y, 
+  title, 
+  description, 
+  image, 
+  favicon, 
+  domain,
+  loading
+}) => {
+  if (!visible) return null;
 
-export const LinkPreview: React.FC<LinkPreviewProps> = ({ visible, url, x, y }) => {
+  // Calculate position - ensure the preview is visible within viewport
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+  const previewWidth = 320; // Width of our preview
+  const previewHeight = image ? 280 : 180; // Estimate height based on content
+  
+  // Check if preview would go off-screen to the right
+  const finalX = x + previewWidth > viewportWidth ? x - previewWidth - 20 : x + 20;
+  
+  // Check if preview would go off-screen to the top
+  // If the preview would be above the viewport, position it below the cursor
+  const finalY = y - previewHeight < 0 ? y + 20 : y - previewHeight - 20;
 
-    const [previewData, setPreviewData] = useState<PreviewData>({
-        title: '',
-        description: '',
-        image: '',
-        loading: false,
-        error: null
-    });
+  // Position the preview near the cursor
+  const previewStyle: React.CSSProperties = {
+    position: 'fixed',
+    left: `${finalX}px`,
+    top: `${finalY}px`,
+    width: '320px',
+    backgroundColor: '#fff',
+    borderRadius: '8px',
+    boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)',
+    zIndex: 2147483647,
+    overflow: 'hidden',
+    pointerEvents: 'none',
+    maxHeight: '400px',
+    border: '1px solid rgba(0, 0, 0, 0.1)',
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+    transition: 'opacity 0.15s ease-in-out',
+  };
 
-    useEffect(() => {
-        // Don't fetch if not visible or no URL
-        if (!visible || !url) return;
-
-        const fetchPreviewData = async () => {
-            try {
-                setPreviewData(prev => ({ ...prev, loading: true, error: null }));
-
-                // Send message to background script to fetch preview
-                const response = await browser.runtime.sendMessage({
-                    action: 'fetchPreview',
-                    url
-                });
-
-                if (response.error) {
-                    setPreviewData(prev => ({
-                        ...prev,
-                        loading: false,
-                        error: response.error
-                    }));
-                }
-
-                else {
-                    setPreviewData({
-                        title: response.title || '',
-                        description: response.description || '',
-                        image: response.image || '',
-                        loading: false,
-                        error: null
-                    });
-                }
+  return (
+    <div style={previewStyle}>
+      {/* Loading state */}
+      {loading && (
+        <div style={{
+          padding: '16px',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          height: '120px',
+        }}>
+          <div style={{
+            width: '24px',
+            height: '24px',
+            border: '2px solid #f3f3f3',
+            borderTop: '2px solid #3498db',
+            borderRadius: '50%',
+            animation: 'spin 1s linear infinite',
+            marginBottom: '12px',
+          }} />
+          <p style={{ 
+            fontSize: '14px',
+            color: '#666',
+            margin: 0
+          }}>
+            Loading preview...
+          </p>
+          <style>{`
+            @keyframes spin {
+              0% { transform: rotate(0deg); }
+              100% { transform: rotate(360deg); }
             }
+          `}</style>
+        </div>
+      )}
 
-            catch (error) {
-                setPreviewData(prev => ({
-                    ...prev,
-                    loading: false,
-                    error: 'Failed to load preview'
-                }));
-            }
-        };
+      {/* Preview content when not loading */}
+      {!loading && (
+        <>
+          {/* Preview image if available */}
+          {image && (
+            <div style={{
+              width: '100%',
+              height: '160px',
+              backgroundImage: `url(${image})`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              borderBottom: '1px solid rgba(0, 0, 0, 0.05)',
+            }} />
+          )}
+          
+          <div style={{ padding: '12px 16px' }}>
+            {/* Domain with favicon */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              marginBottom: '8px',
+            }}>
+              {favicon && (
+                <img 
+                  src={favicon} 
+                  alt="" 
+                  style={{
+                    width: '16px',
+                    height: '16px',
+                    marginRight: '6px',
+                    borderRadius: '2px',
+                  }} 
+                />
+              )}
+              <span style={{
+                fontSize: '12px',
+                color: '#666',
+                textOverflow: 'ellipsis',
+                overflow: 'hidden',
+                whiteSpace: 'nowrap',
+              }}>
+                {domain || new URL(url).hostname}
+              </span>
+            </div>
+            
+            {/* Title */}
+            <h3 style={{
+              margin: '0 0 8px 0',
+              fontSize: '15px',
+              fontWeight: 600,
+              lineHeight: 1.3,
+              color: '#222',
+              display: '-webkit-box',
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: 'vertical',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}>
+              {title || 'No title available'}
+            </h3>
+            
+            {/* Description */}
+            <p style={{
+              margin: 0,
+              fontSize: '13px',
+              lineHeight: 1.4,
+              color: '#555',
+              display: '-webkit-box',
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: 'vertical',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}>
+              {description || 'No description available'}
+            </p>
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
 
-        fetchPreviewData();
-    }, [visible, url]);
-
-    if (!visible) return null;
-
-    // Position the preview above the cursor
-    const previewStyle = {
-        position: 'fixed',     //position the preview above the cursor even if the page is scrolled
-        left: `${x}px`,       //This places the left edge of the preview at the x-coordinate passed as a prop to the component. This x-coordinate typically represents the horizontal position of the cursor.
-        top: `${y - 10}px`,   //This places the top edge of the preview at the y-coordinate passed as a prop to the component. This y-coordinate typically represents the vertical position of the cursor.
-        transform: 'translateY(-100%)',    //This moves the preview 100% of its height upwards, effectively placing it above the cursor.
-        width: '300px',    //This sets the width of the preview to 300 pixels.
-        backgroundColor: '#fff',
-        borderRadius: '8px',
-        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-        zIndex: 2147483647,
-        overflow: 'hidden', //This hides any content that overflows the preview's boundaries.
-        pointerEvents: 'none', // This prevents the preview from interfering with mouse interactions.
-    } as React.CSSProperties;
-
-
-}
+export default LinkPreview;
