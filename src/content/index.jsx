@@ -3,7 +3,9 @@
 
 
 /*
-The Problem: Your current cache in background.js (the previewCache Map) will grow indefinitely as the user browses. 
+things to do -- 
+
+The Problem: the current cache in background.js (the previewCache Map) will grow indefinitely as the user browses. 
 This can consume a significant amount of memory over a long period, a "memory leak."
 
 The Solution: Implement a more robust caching strategy.
